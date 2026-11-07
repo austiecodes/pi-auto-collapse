@@ -380,15 +380,6 @@ function safeCall(
 	}
 }
 
-// History fallback: built-in call line is kept, result becomes one summary line.
-function compactSummary(result: any, theme: ThemeLike, context: RenderContext) {
-	if (context.isError) {
-		return new Text(theme.fg("error", `${CONNECTOR} ✗ ${firstLine(resultText(result))}`), context.outputPad, 0);
-	}
-	const n = countLines(resultText(result));
-	return new Text(n > 0 ? theme.fg("muted", `${CONNECTOR} ${n} lines`) : "", context.outputPad, 0);
-}
-
 function invalidateGroup(g: Group) {
 	for (const call of g.calls) rowInvalidators.get(call.id)?.();
 }
@@ -471,14 +462,35 @@ function grouped(definition: ToolDefinitionLike): ToolDefinitionLike {
 		context: RenderContext,
 	) => {
 		const g = groups.get(context.toolCallId);
-		if (!g) return compactSummary(result, theme, context);
+		if (!g) {
+			// Rows without group state (pre-reload history): verb line only,
+			// expandable on click
+			if (context.expanded) return stockResult(result, options, theme, context);
+			if (context.isError) {
+				return new Text(theme.fg("error", `${CONNECTOR} ✗ ${firstLine(resultText(result))}`), context.outputPad, 0);
+			}
+			return new Text("", 0, 0);
+		}
 
 		if (g.expanded) return stockResult(result, options, theme, context);
 
-		const folded = g.finalized && g.calls.length >= 2;
-
 		// Window mode: live output and results live inside the window
 		if (g.calls.length >= 3 && !g.finalized) return new Text("", 0, 0);
+
+		// Single call: live preview while running, verb line only when done.
+		// Clicking the verb line (or Ctrl+O) expands the full output.
+		if (g.calls.length === 1) {
+			if (context.expanded || options.isPartial) return stockResult(result, options, theme, context);
+			if (context.isError) {
+				const wrap = new Container();
+				wrap.addChild(stockCall(context.args, theme, context));
+				wrap.addChild(new Text(theme.fg("error", `${CONNECTOR} ✗ ${firstLine(resultText(result))}`), context.outputPad, 0));
+				return wrap;
+			}
+			return new Text("", 0, 0);
+		}
+
+		const folded = g.finalized && g.calls.length >= 2;
 
 		// Normal rendering for everything that is not folded
 		if (!folded) return stockResult(result, options, theme, context);

@@ -10,12 +10,11 @@ highlighting, diffs, full output).
 
 ## What it looks like
 
-One call renders as a verb line with the stock result preview below:
+One call renders as a single verb line. The live output streams while the
+command runs, folds away when it finishes, and comes back on click:
 
 ```text
-● Ran 1 command (go test ./...)
-  ... (278 earlier lines, ctrl+o to expand)
-  Took 2.4s
+● Ran 1 command (go test ./...) · 2.4s
 ```
 
 Two consecutive calls fold to verb lines when the sequence completes. From
