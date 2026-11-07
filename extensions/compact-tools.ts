@@ -547,8 +547,10 @@ export default function (pi: ExtensionAPI) {
 
 	// Register a call into the current group, creating the group on first
 	// sight. Always returns the group that CONTAINS the call: if the call was
-	// pre-registered, that may be an older group than `current`.
-	function register(toolCallId: string, name: string, args: any): Group {
+	// pre-registered, that may be an older group than `current`. Returns
+	// undefined for tools that do not participate in grouping.
+	function register(toolCallId: string, name: string, args: any): Group | undefined {
+		if (!VERBS[name]) return undefined;
 		const existing = groups.get(toolCallId);
 		if (existing) return existing;
 		if (!current) current = newGroup();
@@ -614,13 +616,16 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	// Pre-register calls while the assistant message is still streaming
-	// arguments: the TUI creates the row at this point, before execution
+	// arguments: the TUI creates the row at this point, before execution.
+	// Only the seven built-ins participate in grouping; unknown tools
+	// (MCP, other extensions) render natively and stay transparent to it.
 	pi.on("message_update", async (event: any) => {
 		const contents = event.message?.content;
 		if (!Array.isArray(contents)) return;
 		let touched = false;
 		for (const c of contents) {
 			if (c?.type !== "toolCall" || groups.has(c.id)) continue;
+			if (!VERBS[c.name]) continue;
 			const g = register(c.id, c.name, c.arguments);
 			g.pending++;
 			touched = true;
@@ -632,6 +637,7 @@ export default function (pi: ExtensionAPI) {
 		uiCtx = ctx;
 		if (event.parentToolCallId) return; // nested calls have no transcript row
 		const g = register(event.toolCallId, event.toolName, event.args);
+		if (!g) return; // unknown tools do not participate in grouping
 		if (g.ended) g.ended = false; // late activity reopens the group
 		const call = g.calls.find((c) => c.id === event.toolCallId);
 		if (call && !call.started) {

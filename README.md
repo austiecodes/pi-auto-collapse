@@ -77,7 +77,7 @@ All in `extensions/compact-tools.ts`:
   assistant message ends the consecutive sequence).
 - Resumed sessions have no live group state; their rows fall back to the
   built-in call line plus a one-line result summary.
-- MCP and other extension tools are not grouped; they render with pi's
+- MCP and other extension tools are transparent to grouping: they render with
   default handling.
 - Other extensions that re-register the same built-in tools will conflict
   with this one; load only one tool-rendering extension at a time.
