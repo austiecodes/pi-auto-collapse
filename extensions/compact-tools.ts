@@ -210,6 +210,17 @@ function groupStats(g: Group): { errors: number; ms: number } {
 	};
 }
 
+// Compact duration label: sub-0.1s omitted, one decimal under 10s, integer above
+function fmtDur(ms: number | undefined): string | undefined {
+	if (ms === undefined || ms < 100) return undefined;
+	if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
+	return `${Math.round(ms / 1000)}s`;
+}
+
+function clusterDuration(cluster: Cluster): number {
+	return cluster.calls.reduce((sum, c) => sum + (c.durationMs ?? 0), 0);
+}
+
 interface Cluster {
 	name: string;
 	calls: GroupedCall[];
@@ -240,34 +251,40 @@ function clusterLine(cluster: Cluster, theme: ThemeLike): string {
 		line += theme.fg("dim", " (") + [...shown, ...more].join(theme.fg("dim", " · ")) + theme.fg("dim", ")");
 	}
 	if (failed > 0) line += theme.fg("error", ` (${failed} failed)`);
+	const duration = fmtDur(clusterDuration(cluster));
+	if (duration) line += theme.fg("muted", ` (${duration})`);
 	return line;
 }
 
 // The verb-line block a finished group (2+ calls) folds to
 function groupBlock(g: Group, theme: ThemeLike, context: RenderContext): Text {
-	const clusters = clustersOf(g);
 	const lines: string[] = [];
 
+	// Header: total calls and total time carry the summary
+	const { errors, ms } = groupStats(g);
+	let header =
+		`${dot(errors > 0 ? "error" : "success", theme)} ` +
+		theme.fg("toolTitle", theme.bold(`Called ${g.calls.length} tool${g.calls.length > 1 ? "s" : ""}`));
+	const total = fmtDur(ms);
+	if (total) header += theme.fg("muted", ` · ${total}`);
+	if (g.finalized) header += theme.fg("dim", ` ${context.keyHint("app.tools.expand", "to expand")}`);
+	lines.push(header);
+
+	const clusters = clustersOf(g);
 	let kept = clusters;
 	if (clusters.length > KEPT_CLUSTERS) {
 		const compressed = clusters.slice(0, clusters.length - KEPT_CLUSTERS);
 		kept = clusters.slice(-KEPT_CLUSTERS);
 		const counts = new Map<string, number>();
-		let total = 0;
+		let totalHidden = 0;
 		for (const cluster of compressed) {
-			total += cluster.calls.length;
+			totalHidden += cluster.calls.length;
 			counts.set(cluster.name, (counts.get(cluster.name) ?? 0) + cluster.calls.length);
 		}
 		const parts = [...counts.entries()].map(([name, n]) => plural(n, NOUNS[name] ?? "action"));
-		lines.push(theme.fg("muted", `… ${total} more action${total > 1 ? "s" : ""} (${parts.join(", ")}) …`));
+		lines.push(theme.fg("muted", `… ${totalHidden} more action${totalHidden > 1 ? "s" : ""} (${parts.join(", ")}) …`));
 	}
 	for (const cluster of kept) lines.push(clusterLine(cluster, theme));
-
-	// Total duration and the expansion hint close the block
-	const { ms } = groupStats(g);
-	let suffix = ms >= 1000 ? theme.fg("muted", ` · ${(ms / 1000).toFixed(1)}s`) : "";
-	if (g.finalized) suffix += theme.fg("dim", ` ${context.keyHint("app.tools.expand", "to expand")}`);
-	if (suffix && lines.length > 0) lines[lines.length - 1] += suffix;
 
 	return new Text(lines.join("\n"), context.outputPad, 0);
 }
@@ -297,13 +314,16 @@ class GroupWindow {
 		const inFlight = this.group.running + this.group.pending;
 		let title: string;
 		if (inFlight > 0) {
-			title = dot("running", this.theme) + fg("muted", ` ${this.group.calls.length - inFlight} done, ${inFlight} running…`);
+			title =
+				dot("running", this.theme) +
+				fg("muted", ` Called ${this.group.calls.length} tool${this.group.calls.length > 1 ? "s" : ""} · ${this.group.calls.length - inFlight} done, ${inFlight} running…`);
 		} else {
 			// Holding after completion: final stats
 			const { errors, ms } = groupStats(this.group);
 			title = dot(errors > 0 ? "error" : "success", this.theme);
-			title += fg("muted", ` ${this.group.calls.length} action${this.group.calls.length > 1 ? "s" : ""}`);
-			if (ms >= 1000) title += fg("muted", ` · ${(ms / 1000).toFixed(1)}s`);
+			title += fg("muted", ` Called ${this.group.calls.length} tool${this.group.calls.length > 1 ? "s" : ""}`);
+			const total = fmtDur(ms);
+			if (total) title += fg("muted", ` · ${total}`);
 			if (errors > 0) title += fg("error", ` · ${errors} failed`);
 			else title += fg("success", " ✓");
 		}
@@ -356,9 +376,8 @@ function contextVerbLine(name: string, args: any, context: RenderContext, theme:
 	if (arg) {
 		line += theme.fg("dim", " (") + theme.fg("muted", cut(arg, 60)) + theme.fg("dim", ")");
 	}
-	if (context.durationMs !== undefined && context.durationMs >= 1000) {
-		line += theme.fg("muted", ` · ${(context.durationMs / 1000).toFixed(1)}s`);
-	}
+	const duration = fmtDur(context.durationMs);
+	if (duration) line += theme.fg("muted", ` · ${duration}`);
 	return new Text(line, context.outputPad, 0);
 }
 

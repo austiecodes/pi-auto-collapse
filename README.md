@@ -28,9 +28,10 @@ holds for at least two seconds after completion, then folds:
 │   ⎿ ✓ All tests passed
 └───────────────────────────────────────────────────┘
 
+● Called 8 tools · 41.2s (ctrl+o to expand)
 … 4 more actions (2 reads, 1 search, 1 command) …
-● Ran 2 commands (npm test · pnpm build)
-● Read 1 file (output.txt) · 4.2s (ctrl+o to expand)
+● Ran 2 commands (npm test · pnpm build) (12.3s)
+● Read 1 file (output.txt) (30.5s)
 ```
 
 Consecutive same-tool calls merge into one verb line (`Ran N commands`,
