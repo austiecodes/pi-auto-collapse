@@ -1,10 +1,10 @@
 {
-	"name": "pi-tools-collapse",
-	"version": "0.1.0",
+	"name": "pi-auto-collapse",
+	"version": "0.1.1",
 	"description": "Antigravity-style collapsed tool transcript for pi: verb lines, grouped sequences, a bounded live activity window, and a 3-line thinking preview",
 	"keywords": ["pi-package"],
 	"license": "MIT",
-	"repository": "https://github.com/austiecodes/pi-tools-collapse",
+	"repository": "https://github.com/austiecodes/pi-auto-collapse",
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
 		"@earendil-works/pi-tui": "*"

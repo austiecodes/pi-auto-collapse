@@ -340,13 +340,43 @@ function shellBox(theme: ThemeLike, context: RenderContext, inner: any) {
 	return box;
 }
 
-function safeCall(base: RenderCall | undefined, args: any, theme: ThemeLike, context: RenderContext) {
+// A verb line built from row context alone, without group state. Covers
+// single calls and rows that predate a /reload, whose groups were cleared.
+function contextVerbLine(name: string, args: any, context: RenderContext, theme: ThemeLike): Text {
+	const status: CallStatus = context.isError
+		? "error"
+		: context.isPartial
+			? "running"
+			: context.durationMs !== undefined
+				? "success"
+				: "pending";
+	const [verb, noun] = VERBS[name] ?? ["Ran", "tool"];
+	const arg = callArg(name, args);
+	let line = `${dot(status, theme)} ` + theme.fg("toolTitle", theme.bold(`${verb} 1 ${noun}`));
+	if (arg) {
+		line += theme.fg("dim", " (") + theme.fg("muted", cut(arg, 60)) + theme.fg("dim", ")");
+	}
+	if (context.durationMs !== undefined && context.durationMs >= 1000) {
+		line += theme.fg("muted", ` · ${(context.durationMs / 1000).toFixed(1)}s`);
+	}
+	return new Text(line, context.outputPad, 0);
+}
+
+function safeCall(
+	base: RenderCall | undefined,
+	name: string,
+	args: any,
+	theme: ThemeLike,
+	context: RenderContext,
+) {
 	try {
 		// Strip lastComponent: built-in call renderers reuse their own Text via
 		// .setText() and cannot handle the wrapped Box this renderer returns.
 		return base?.(args, theme, { ...context, lastComponent: undefined }) ?? new Text("", 0, 0);
 	} catch {
-		return new Text(theme.fg("toolTitle", "tool call"), context.outputPad, 0);
+		// Built-in renderers may throw on a module-global theme that a reloaded
+		// jiti instance never initialized; fall back to our own verb line.
+		return contextVerbLine(name, args, context, theme);
 	}
 }
 
@@ -373,9 +403,10 @@ function refreshLeader(g: Group) {
 function grouped(definition: ToolDefinitionLike): ToolDefinitionLike {
 	const baseCall = definition.renderCall;
 	const baseResult = definition.renderResult;
+	const toolName = String(definition.name ?? "");
 
 	const stockCall = (args: any, theme: ThemeLike, context: RenderContext) =>
-		shellBox(theme, context, safeCall(baseCall, args, theme, context));
+		shellBox(theme, context, safeCall(baseCall, toolName, args, theme, context));
 
 	// Built-in result rendering with the row's own options: stock collapsed
 	// preview, live partial, or expanded full view.
@@ -396,7 +427,7 @@ function grouped(definition: ToolDefinitionLike): ToolDefinitionLike {
 		rowInvalidators.set(context.toolCallId, context.invalidate);
 
 		const g = groups.get(context.toolCallId);
-		if (!g) return stockCall(args, theme, context);
+		if (!g) return contextVerbLine(toolName, args, context, theme);
 
 		// Row-level expansion toggles (mouse click on the row, Ctrl+O) flip the
 		// whole group. Edge detection keeps this transition-triggered only, so
@@ -426,18 +457,7 @@ function grouped(definition: ToolDefinitionLike): ToolDefinitionLike {
 		// Single call: Antigravity verb line; the stock result preview below
 		// (live tail, "... (N earlier lines)", Took timer) is kept via renderResult
 		if (g.calls.length === 1) {
-			const call = g.calls[0];
-			const [verb, noun] = VERBS[call.name] ?? ["Ran", "tool"];
-			const arg = callArgs.get(call.id) ?? "";
-			let line =
-				`${dot(callStatus(call), theme)} ` + theme.fg("toolTitle", theme.bold(`${verb} 1 ${noun}`));
-			if (arg) {
-				line += theme.fg("dim", " (") + theme.fg("muted", cut(arg, 60)) + theme.fg("dim", ")");
-			}
-			if (call.durationMs !== undefined && call.durationMs >= 1000) {
-				line += theme.fg("muted", ` · ${(call.durationMs / 1000).toFixed(1)}s`);
-			}
-			return new Text(line, context.outputPad, 0);
+			return contextVerbLine(toolName, args, context, theme);
 		}
 
 		// A pair still running: normal rendering

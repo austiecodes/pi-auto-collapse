@@ -1,4 +1,4 @@
-# pi-tools-collapse
+# pi-auto-collapse
 
 An Antigravity-style tool transcript for [pi](https://pi.dev): consecutive
 tool calls collapse into verb lines, long sequences run in a bounded live
@@ -46,7 +46,7 @@ thinking behind an `○ Thinking…` label.
 ## Install
 
 ```bash
-pi install github:austiecodes/pi-tools-collapse
+pi install github:austiecodes/pi-auto-collapse
 ```
 
 Or copy `extensions/compact-tools.ts` into `~/.pi/agent/extensions/` and
